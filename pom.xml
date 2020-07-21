@@ -13,9 +13,7 @@
     </dependency>
   </dependencies>
   <build>
-    <build>
-      <sourceDirectory>src</sourceDirectory>
-    </build>
+    <sourceDirectory>src</sourceDirectory>
   </build>
   <repositories>
     <repository>

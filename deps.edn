@@ -1,2 +1,3 @@
-{:aliases {:jar {:extra-deps {seancorfield/depstar {:mvn/version "1.0.94"}}
-                 :main-opts ["-m" "hf.depstar.jar" "s3-mvn-upload.jar"]}}}
+{:paths   ["src"]
+ :aliases {:jar {:extra-deps {seancorfield/depstar {:mvn/version "1.0.94"}}
+                 :main-opts  ["-m" "hf.depstar.jar" "s3-mvn-upload.jar"]}}}
