@@ -2,6 +2,13 @@
 
 Just uploads a jar file to a S3 Maven repo. 
 
+## Prerequisites
+
+The below CLI executables must be available on the classpath. 
+
+- md5sum
+- aws
+
 ## Usage 
 
 ```shell script
