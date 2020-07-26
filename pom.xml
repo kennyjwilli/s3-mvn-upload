@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>s3-mvn-upload</groupId>
   <artifactId>s3-mvn-upload</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <name>s3-mvn-upload</name>
   <dependencies>
     <dependency>

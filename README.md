@@ -12,5 +12,5 @@ The below CLI executables must be available on the classpath.
 ## Usage 
 
 ```shell script
-clojure -Sdeps '{:deps {s3-mvn-upload {:mvn/version "0.1.0"}}}' -m s3-mvn-upload.core com.datomic/dev-local 0.9.172 dev-local-0.9.172.jar s3://my-bucket/releases
+clojure -Sdeps '{:deps {s3-mvn-upload {:mvn/version "0.1.1"}}}' -m s3-mvn-upload.core com.datomic/dev-local 0.9.172 dev-local-0.9.172.jar s3://my-bucket/releases
 ```
