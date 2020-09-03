@@ -1,3 +1,4 @@
 {:paths   ["src"]
+ :deps    {com.amazonaws/aws-java-sdk-s3 {:mvn/version "1.11.853"}}
  :aliases {:jar {:extra-deps {seancorfield/depstar {:mvn/version "1.0.94"}}
                  :main-opts  ["-m" "hf.depstar.jar" "s3-mvn-upload.jar"]}}}
