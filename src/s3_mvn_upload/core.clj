@@ -3,8 +3,10 @@
     [clojure.string :as str]
     [clojure.java.io :as io]
     [clojure.java.shell :as shell])
-  (:import (java.util.jar JarFile JarEntry JarInputStream)
-           (java.io IOException)))
+  (:import (java.io IOException)
+           (java.nio.file Paths Files)
+           (java.security MessageDigest)
+           (java.util.jar JarFile JarEntry)))
 
 (defn print-err
   [x]
@@ -32,14 +34,12 @@
 
 (defn md5sum
   [path]
-  (try
-    (let [{:keys [exit out err]} (shell/sh "md5sum" path)]
-      (print-err err)
-      (when (= exit 0)
-        (first (str/split out #" "))))
-    (catch Exception ex
-      (print-err (.getMessage ex))
-      nil)))
+  (let [uri (.toURI (io/file path))]
+    (-> (MessageDigest/getInstance "MD5")
+        (doto (.update (Files/readAllBytes (Paths/get uri))))
+        .digest
+        (->> (BigInteger. 1))
+        (.toString 16))))
 
 (defn find-pom-contents
   "Find path of pom file in jar file, or nil if it doesn't exist"
@@ -56,8 +56,7 @@
     (catch IOException _t nil)))
 
 (comment
-  (find-pom (JarFile. (io/file "s3-mvn-upload.jar")))
-  )
+  (find-pom (JarFile. (io/file "s3-mvn-upload.jar"))))
 
 (defn upload!
   [path s3-uri]
