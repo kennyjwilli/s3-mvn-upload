@@ -3,10 +3,15 @@
     [clojure.string :as str]
     [clojure.java.io :as io]
     [clojure.java.shell :as shell])
-  (:import (java.io IOException)
+  (:import (java.util.jar JarFile JarEntry JarInputStream)
+           (com.amazonaws.services.s3 AmazonS3 AmazonS3ClientBuilder)
+           (java.io IOException)
            (java.nio.file Paths Files)
            (java.security MessageDigest)
-           (java.util.jar JarFile JarEntry)))
+           (com.amazonaws.services.s3.model PutObjectRequest ObjectMetadata)
+           (java.net URI)))
+
+(set! *warn-on-reflection* true)
 
 (defn print-err
   [x]
@@ -57,13 +62,25 @@
 
 (comment
   (find-pom (JarFile. (io/file "s3-mvn-upload.jar"))))
+  (find-pom (JarFile. (io/file "s3-mvn-upload.jar"))))
+
+(def standard-s3-client
+  (delay
+    (.build (AmazonS3ClientBuilder/standard))))
 
 (defn upload!
   [path s3-uri]
-  (let [{:keys [exit out err]} (shell/sh "aws" "s3" "cp" "--no-progress" path s3-uri)]
-    (println out)
-    (print-err err)
-    (= exit 0)))
+  (let [uri (URI. s3-uri)]
+    (.putObject ^AmazonS3 @standard-s3-client
+                (PutObjectRequest.
+                  (.getHost uri)
+                  (subs (.getPath uri) 1)
+                  ;; TODO: I can use `io/input-stream` here
+                  ;; it allow to upload files without create a file in disk
+                  ;; ATM Generates  this warn:
+                  ;; WARNING: No content length specified for stream data.  Stream contents will be buffered in memory and could result in out of memory errors.
+                  (io/file path)
+                  #_(ObjectMetadata.)))))
 
 (defn run
   [[artifact-name-str version jar-file uri-start]]
