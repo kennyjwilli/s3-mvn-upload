@@ -1,4 +1,6 @@
 {:paths   ["src"]
- :deps    {com.amazonaws/aws-java-sdk-s3 {:mvn/version "1.11.853"}}
- :aliases {:jar {:extra-deps {seancorfield/depstar {:mvn/version "1.0.94"}}
-                 :main-opts  ["-m" "hf.depstar.jar" "s3-mvn-upload.jar"]}}}
+ :deps    {com.amazonaws/aws-java-sdk-s3 {:mvn/version "1.12.144"}}
+ :aliases {:build {:deps       {io.github.seancorfield/build-clj {:git/tag "v0.6.7" :git/sha "22c2d09"}}
+                   :ns-default build}
+           :s3d   {:exec-fn  s3-mvn-upload.core/deploy
+                   :jvm-opts ["-Dclojure.main.report=stderr"]}}}

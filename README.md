@@ -1,9 +1,25 @@
 # s3-mvn-upload
 
-Just uploads a jar file to a S3 Maven repo. 
+Uploads a jar file to a S3 Maven repo
 
-## Usage 
+## Usage
+
+### Execute
+
+```clojure
+{:s3-deploy {:extra-deps {s3-mvn-upload/s3-mvn-upload {:mvn/version "RELEASE"}}
+             :exec-fn    s3-mvn-upload.core/deploy
+             :exec-args  {:artifact   "dev-local-0.9.172.jar"
+                          :repository "s3://my-bucket/releases"}}}
+```
+
+### Main
 
 ```shell script
-clojure -Sdeps '{:deps {s3-mvn-upload {:mvn/version "0.2.0"}}}' -m s3-mvn-upload.core com.datomic/dev-local 0.9.172 dev-local-0.9.172.jar s3://my-bucket/releases
+clojure -Sdeps '{:deps {s3-mvn-upload {:mvn/version "1.0.13"}}}' -M -m s3-mvn-upload.core dev-local-0.9.172.jar s3://my-bucket/releases
 ```
+
+## Development
+
+- Jar: clojure -T:build jar
+- Deploy: clojure -T:build deploy

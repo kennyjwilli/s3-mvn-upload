@@ -4,4 +4,4 @@
 
 (deftest md5sum
   (is (= "781e5e245d69b566979b86e28d23f2c7"
-         (s3mu/md5sum "test/md5sum-example.txt"))))
+        (s3mu/md5sum-file "test/md5sum-example.txt"))))

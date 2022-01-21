@@ -1,6 +1,7 @@
 (ns s3-mvn-upload.core
   (:require
     [clojure.string :as str]
+    [clojure.xml :as xml]
     [clojure.java.io :as io])
   (:import (java.util.jar JarFile JarEntry)
            (com.amazonaws.services.s3 AmazonS3 AmazonS3ClientBuilder)
@@ -27,21 +28,24 @@
   [artifact-name version extension]
   (let [n (canonicalize-name artifact-name)]
     (str/join "/"
-              (concat (str/split (namespace n) #"\.")
-                      [(name n)
-                       version
-                       (str (name n) "-" version extension)]))))
+      (concat (str/split (namespace n) #"\.")
+        [(name n)
+         version
+         (str (name n) "-" version extension)]))))
 
-(defn md5sum
+(defn md5sum-bytes
+  [^bytes bytes]
+  (-> (MessageDigest/getInstance "MD5")
+    (doto (.update bytes))
+    .digest
+    (->> (BigInteger. 1))
+    (.toString 16)))
+
+(defn md5sum-file
   [path]
-  (let [uri (.toURI (io/file path))]
-    (-> (MessageDigest/getInstance "MD5")
-        (doto (.update (Files/readAllBytes (Paths/get uri))))
-        .digest
-        (->> (BigInteger. 1))
-        (.toString 16))))
+  (md5sum-bytes (-> path io/file .toURI Paths/get Files/readAllBytes)))
 
-(defn find-pom-contents
+(defn ^java.io.InputStream find-pom-input-stream
   "Find path of pom file in jar file, or nil if it doesn't exist"
   [^JarFile jar-file]
   (try
@@ -49,14 +53,35 @@
       (when entry
         (let [name (.getName entry)]
           (if (and (str/starts-with? name "META-INF/")
-                   (str/ends-with? name "pom.xml"))
-            (with-open [jis (.getInputStream jar-file entry)]
-              (slurp jis))
+                (str/ends-with? name "pom.xml"))
+            (.getInputStream jar-file entry)
             (recur entries)))))
     (catch IOException _t nil)))
 
+(defn find-pom-contents
+  "Find path of pom file in jar file, or nil if it doesn't exist"
+  [^JarFile jar-file]
+  (with-open [is (find-pom-input-stream jar-file)]
+    (slurp is)))
+
 (comment
   (find-pom-contents (JarFile. (io/file "s3-mvn-upload.jar"))))
+
+(defn find-artifact-coords
+  [xml-parsable]
+  (let [pom-data (xml/parse xml-parsable)
+        {:keys [groupId artifactId version]} (into {} (map (juxt :tag identity)) (:content pom-data))
+        group-id (-> groupId :content first)
+        artifact-id (-> artifactId :content first)
+        version (-> version :content first)]
+    {:group-id    group-id
+     :artifact-id artifact-id
+     :version     version}))
+
+(comment
+  (def pom-is (find-pom-input-stream (JarFile. "dev-local-1.0.242.jar")))
+  (find-artifact-coords pom-is)
+  (def pom-data (clojure.xml/parse pom-is)))
 
 (def standard-s3-client
   (delay
@@ -72,38 +97,52 @@
      (upload! c s3-uri is (alength (.getBytes string-content)))))
   ([c s3-uri ^InputStream input length]
    (let [uri (URI. s3-uri)]
-     (.putObject ^AmazonS3 c
-                 (PutObjectRequest.
-                   (.getHost uri)
-                   (subs (.getPath uri) 1)
-                   input
-                   (doto (ObjectMetadata.)
-                     (.setContentLength length)))))))
+     (with-open [input input]
+       (.putObject ^AmazonS3 c
+         (PutObjectRequest.
+           (.getHost uri)
+           (subs (.getPath uri) 1)
+           input
+           (doto (ObjectMetadata.)
+             (.setContentLength length))))))))
 
-(defn run
-  [[artifact-name-str version jar-path uri-start]]
-  (assert artifact-name-str "missing artifact name")
-  (assert version "missing version")
-  (assert jar-path "missing jar file")
+(defn deploy-details
+  [{:keys [artifact repository]}]
+  (let [urif #(str repository "/" %)
+        jar-file (io/file artifact)
+        pom-jar-file (JarFile. jar-file)
+        pom-contents (find-pom-contents pom-jar-file)
+        {:keys [group-id artifact-id version]} (find-artifact-coords (find-pom-input-stream pom-jar-file))
+        artifact-coord-sym (symbol (or group-id artifact-id) artifact-id)
+        pom-md5 (md5sum-bytes (.getBytes ^String pom-contents))
+        jar-md5 (md5sum-file jar-file)]
+    {:uploads [{:key  (urif (s3-key artifact-coord-sym version ".jar.md5"))
+                :data jar-md5}
+               {:key  (urif (s3-key artifact-coord-sym version ".pom"))
+                :data pom-contents}
+               {:key  (urif (s3-key artifact-coord-sym version ".pom.md5"))
+                :data pom-md5}
+               {:key  (urif (s3-key artifact-coord-sym version ".pom.md5"))
+                :data pom-md5}
+               {:key    (urif (s3-key artifact-coord-sym version ".jar"))
+                :data   (io/input-stream jar-file)
+                :length (.length jar-file)}]}))
 
-  (let [artifact-name (clojure.edn/read-string artifact-name-str)
-        urif #(str uri-start "/" %)
-        jar-file (io/file jar-path)
-        pom-contents (find-pom-contents (JarFile. jar-file))
-        pom-md5 (md5sum jar-path)
-        jar-md5 (md5sum jar-path)
+(comment
+  (deploy-details {:artifact   "dev-local-1.0.242.jar"
+                   :repository "s3://example/releases"}))
+
+(defn deploy
+  [opts]
+  (let [{:keys [uploads]} (deploy-details opts)
         c @standard-s3-client]
-    (assert pom-contents "Jar is missing a pom.xml file.")
-
-    (upload! c (urif (s3-key artifact-name version ".jar.md5")) jar-md5)
-    (upload! c (urif (s3-key artifact-name version ".pom")) pom-contents)
-    (upload! c (urif (s3-key artifact-name version ".pom.md5")) pom-md5)
-    (with-open [is (io/input-stream jar-file)]
-      (upload! c (urif (s3-key artifact-name version ".jar")) is (.length jar-file)))))
+    (doseq [{:keys [key data length]} uploads]
+      (if length
+        (upload! c key data length)
+        (upload! c key data)))
+    (shutdown-agents)
+    nil))
 
 (defn -main
   [& args]
-  (run args)
-  (shutdown-agents))
-
-;; artifact version jarfile s3://my-bucket/releases
+  (deploy {:artifact (first args) :repository (second args)}))
